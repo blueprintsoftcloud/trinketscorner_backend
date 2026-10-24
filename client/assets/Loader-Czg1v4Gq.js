@@ -1,0 +1,1 @@
+import{j as e}from"./index-Dx-fQcxz.js";const s=()=>e.jsx("div",{className:"flex flex-col items-center justify-center min-h-screen bg-white",children:e.jsx("p",{className:"text-sm uppercase font-bold tracking-widest text-slate-400 font-mono text-center select-none",children:"Loading..."})});export{s as L};
