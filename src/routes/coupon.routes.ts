@@ -5,6 +5,8 @@ import {
   updateCoupon,
   deleteCoupon,
   toggleCoupon,
+  toggleShowToCustomer,
+  getPublicCoupons,
   validateCoupon,
 } from "../controllers/coupon.controller";
 import { authMiddleware } from "../middleware/auth.middleware";
@@ -48,8 +50,15 @@ router.patch(
   adminOrStaff("COUPON_EDIT"),
   toggleCoupon,
 );
+router.patch(
+  "/admin/:id/toggle-visibility",
+  authMiddleware,
+  adminOrStaff("COUPON_EDIT"),
+  toggleShowToCustomer,
+);
 
-// ── Customer coupon validation at checkout (authenticated user) ────────────
+// ── Customer coupon endpoints ──────────────────────────────────────────────
+router.get("/public", getPublicCoupons);
 router.post("/validate", authMiddleware, couponValidateLimiter, validate(couponValidateSchema), validateCoupon);
 
 export default router;

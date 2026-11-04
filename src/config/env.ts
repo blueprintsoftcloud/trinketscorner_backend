@@ -34,14 +34,25 @@ const envSchema = z.object({
   // (Previously also the SMTP account address; email now sends via MSG91, see below.)
   EMAIL_USER: z.string().default("unaiznoushad105@gmail.com"),
 
-  // Cloudinary
-  CLOUDINARY_CLOUD_NAME: z.string().min(1, "CLOUDINARY_CLOUD_NAME is required"),
-  CLOUDINARY_API_KEY: z.string().min(1, "CLOUDINARY_API_KEY is required"),
-  CLOUDINARY_API_SECRET: z.string().min(1, "CLOUDINARY_API_SECRET is required"),
+  // Storage Provider: "r2" (Cloudflare R2 - recommended) or "cloudinary"
+  STORAGE_PROVIDER: z.enum(["r2", "cloudinary"]).default("cloudinary"),
+
+  // Cloudflare R2 (10GB free, unlimited zero-cost egress)
+  R2_ACCOUNT_ID: z.string().default(""),
+  R2_ACCESS_KEY_ID: z.string().default(""),
+  R2_SECRET_ACCESS_KEY: z.string().default(""),
+  R2_BUCKET_NAME: z.string().default(""),
+  R2_PUBLIC_DOMAIN: z.string().default(""),
+
+  // Cloudinary (legacy)
+  CLOUDINARY_CLOUD_NAME: z.string().default(""),
+  CLOUDINARY_API_KEY: z.string().default(""),
+  CLOUDINARY_API_SECRET: z.string().default(""),
 
   // Razorpay — storefront e-commerce checkout
   RAZORPAY_KEY_ID: z.string().min(1, "RAZORPAY_KEY_ID is required"),
   RAZORPAY_KEY_SECRET: z.string().min(1, "RAZORPAY_KEY_SECRET is required"),
+  RAZORPAY_WEBHOOK_SECRET: z.string().default(""),
 
   // MSG91 Mobile OTP (SMS widget) — MSG91_AUTH_KEY is the account-wide key, also
   // used to authenticate the Email API calls below.

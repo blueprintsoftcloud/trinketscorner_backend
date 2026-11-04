@@ -20,6 +20,7 @@ const KEYS = [
   // Contact Us page intro line — the rest of that page (address/phone/email) reuses the
   // SEO_ORG_* fields above instead of duplicating them (see staticPages.controller.ts).
   "PAGE_CONTACT_INTRO",
+  "CATEGORY_SHAPE",
 ] as const;
 type CompanyKey = (typeof KEYS)[number];
 
@@ -81,7 +82,17 @@ const DEFAULT_HERO_CONFIG = {
   },
 };
 
-const DEFAULT_THEME_CONFIG = { themeId: "studio-minimal" };
+interface StorefrontThemeConfig {
+  themeId: string;
+  customButtonBg?: string | null;
+  customButtonText?: string | null;
+}
+
+const DEFAULT_THEME_CONFIG: StorefrontThemeConfig = {
+  themeId: "studio-minimal",
+  customButtonBg: null,
+  customButtonText: null,
+};
 
 // Templates 1/2/3/5/6's "Shop / Company / Support" link grid — Template 4 is a
 // deliberately link-grid-free single centered column, so it's the one key without this.
@@ -176,6 +187,7 @@ export interface FeaturedCategorySlot {
   customSubtitle?: string;
   limit?: number;
   isActive?: boolean;
+  template?: number;
 }
 
 export interface FeaturedCategoriesConfig {
@@ -184,8 +196,8 @@ export interface FeaturedCategoriesConfig {
 
 export const DEFAULT_FEATURED_CATEGORIES_CONFIG: FeaturedCategoriesConfig = {
   slots: [
-    { id: "slot-1", categoryId: "", customTitle: "", customSubtitle: "", limit: 8, isActive: true },
-    { id: "slot-2", categoryId: "", customTitle: "", customSubtitle: "", limit: 8, isActive: true },
+    { id: "slot-1", categoryId: "", customTitle: "", customSubtitle: "", limit: 8, isActive: true, template: 1 },
+    { id: "slot-2", categoryId: "", customTitle: "", customSubtitle: "", limit: 8, isActive: true, template: 1 },
   ],
 };
 
@@ -230,6 +242,7 @@ export const getHomepageConfig = async (req: Request, res: Response) => {
             "ACTIVE_OCCASION",
             "PRE_FOOTER_CONFIG",
             "FEATURED_CATEGORIES_CONFIG",
+            "CATEGORY_SHAPE",
             ...Object.values(SECTION_TEMPLATE_KEYS),
           ],
         },
@@ -254,6 +267,7 @@ export const getHomepageConfig = async (req: Request, res: Response) => {
     const carouselTemplate = toTemplateNum(map[SECTION_TEMPLATE_KEYS.carousel]);
     const discountTemplate = toTemplateNum(map[SECTION_TEMPLATE_KEYS.discount]);
     const featuredTemplate = toTemplateNum(map[SECTION_TEMPLATE_KEYS.featured]);
+    const categoryShape = map["CATEGORY_SHAPE"] === "circle" ? "circle" : "square";
 
     res.status(200).json({
       heroConfig,
@@ -267,6 +281,7 @@ export const getHomepageConfig = async (req: Request, res: Response) => {
       carouselTemplate,
       discountTemplate,
       featuredTemplate,
+      categoryShape,
     });
   } catch (err: any) {
     logger.error("getHomepageConfig error", err);
@@ -457,7 +472,25 @@ export const updateFeaturedCategoriesConfig = async (req: Request, res: Response
 // frontend/src/utils/themes.ts, so re-tuning a theme's palette later needs no data migration.
 export const updateStorefrontTheme = async (req: Request, res: Response) => {
   try {
-    const config = req.body as { themeId: string };
+    const { themeId, customButtonBg, customButtonText } = req.body as {
+      themeId: string;
+      customButtonBg?: string | null;
+      customButtonText?: string | null;
+    };
+    const sanitizeSolidHex = (hex: string | null | undefined): string | null => {
+      if (!hex || typeof hex !== "string") return null;
+      const trimmed = hex.trim();
+      if (!trimmed || trimmed === "transparent") return null;
+      if (/^#[0-9a-fA-F]{6}$/.test(trimmed) || /^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+        return trimmed;
+      }
+      return null;
+    };
+    const config: StorefrontThemeConfig = {
+      themeId: themeId || "studio-minimal",
+      customButtonBg: sanitizeSolidHex(customButtonBg),
+      customButtonText: sanitizeSolidHex(customButtonText),
+    };
     const value = JSON.stringify(config);
     await prisma.appSetting.upsert({
       where: { key: "STOREFRONT_THEME" },
@@ -469,12 +502,40 @@ export const updateStorefrontTheme = async (req: Request, res: Response) => {
       action: "UPDATE_STOREFRONT_THEME",
       entity: "AppSetting",
       entityId: "STOREFRONT_THEME",
-      details: { themeId: config.themeId },
+      details: {
+        themeId: config.themeId,
+        customButtonBg: config.customButtonBg,
+        customButtonText: config.customButtonText,
+      },
     });
     res.status(200).json({ message: "Storefront theme updated", themeConfig: config });
   } catch (err: any) {
     logger.error("updateStorefrontTheme error", err);
     res.status(500).json({ message: "Error updating storefront theme" });
+  }
+};
+
+// PUT /api/admin/homepage-config/category-shape — admin only
+export const updateCategoryShape = async (req: Request, res: Response) => {
+  try {
+    const { categoryShape } = req.body as { categoryShape?: "square" | "circle" };
+    const shape = categoryShape === "circle" ? "circle" : "square";
+    await prisma.appSetting.upsert({
+      where: { key: "CATEGORY_SHAPE" },
+      update: { value: shape },
+      create: { key: "CATEGORY_SHAPE", value: shape },
+    });
+    await createAuditLog({
+      req,
+      action: "UPDATE_CATEGORY_SHAPE",
+      entity: "AppSetting",
+      entityId: "CATEGORY_SHAPE",
+      details: { categoryShape: shape },
+    });
+    res.status(200).json({ message: "Category shape updated", categoryShape: shape });
+  } catch (err: any) {
+    logger.error("updateCategoryShape error", err);
+    res.status(500).json({ message: "Error updating category shape" });
   }
 };
 

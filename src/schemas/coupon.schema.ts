@@ -9,6 +9,8 @@ export const couponCreateSchema = z.object({
   minOrderAmount: z.coerce.number().min(0).optional(),
   maxUses: z.coerce.number().int().positive().nullable().optional(),
   expiresAt: z.string().datetime().or(z.string().min(1)).nullable().optional(),
+  showToCustomer: z.boolean().optional(),
+  colorTheme: z.string().nullable().optional(),
 });
 
 export const couponUpdateSchema = z.object({
@@ -19,6 +21,8 @@ export const couponUpdateSchema = z.object({
   maxUses: z.coerce.number().int().positive().nullable().optional(),
   expiresAt: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
+  showToCustomer: z.boolean().optional(),
+  colorTheme: z.string().nullable().optional(),
 });
 
 export const couponValidateSchema = z.object({

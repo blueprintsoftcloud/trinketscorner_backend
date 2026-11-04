@@ -27,6 +27,7 @@ import {
   updatePreFooterConfig,
   updateFeaturedCategoriesConfig,
   updateStorefrontTheme,
+  updateCategoryShape,
   updateActiveOccasion,
   updateAnnouncementTemplate,
   updateCarouselTemplate,
@@ -92,6 +93,7 @@ router.put("/homepage-config/footer", authMiddleware, adminOrStaff("BANNER_EDIT"
 router.put("/homepage-config/pre-footer", authMiddleware, adminOrStaff("BANNER_EDIT"), updatePreFooterConfig);
 router.put("/homepage-config/featured-categories", authMiddleware, adminOrStaff("BANNER_EDIT"), updateFeaturedCategoriesConfig);
 router.put("/homepage-config/theme", authMiddleware, adminOrStaff("BANNER_EDIT"), updateStorefrontTheme);
+router.put("/homepage-config/category-shape", authMiddleware, adminOrStaff("BANNER_EDIT"), updateCategoryShape);
 router.put("/homepage-config/occasion", authMiddleware, adminOrStaff("BANNER_EDIT"), updateActiveOccasion);
 // Presentation-only template pickers for the 4 sections that don't have per-template
 // content of their own (see companySettings.controller.ts's SECTION_TEMPLATE_KEYS) —

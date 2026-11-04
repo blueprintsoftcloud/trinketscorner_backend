@@ -11,7 +11,8 @@
 // that dies partway through and runs again never loses data and never double-archives.
 
 import cron from "node-cron";
-import { AuditLog, AuditLogArchive, Order, OrderItem, OrderArchive } from "../models/mongoose";
+import { AuditLog, AuditLogArchive, Order, OrderItem, OrderArchive, PaymentLog } from "../models/mongoose";
+import { restoreStock } from "./inventory.service";
 import logger from "../utils/logger";
 
 // Not part of config/env.ts's validated schema (optional, sensible-default archival
@@ -89,6 +90,59 @@ export const archiveOrders = async (): Promise<{ archived: number }> => {
   return { archived };
 };
 
+export const cleanupAbandonedOrders = async (): Promise<{ archived: number }> => {
+  // Orders older than 30 minutes that were initiated via online payment but never completed
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+
+  const abandonedOrders = await Order.find({
+    paymentMethod: "ONLINE",
+    orderStatus: "PROCESSING",
+    paymentStatus: "PENDING",
+    createdAt: { $lt: cutoff },
+  }).lean();
+
+  let cancelled = 0;
+  for (const order of abandonedOrders) {
+    try {
+      // Compare-and-swap so concurrent runs or cancellations don't double process
+      const claimed = await Order.findOneAndUpdate(
+        { _id: order._id, orderStatus: "PROCESSING" },
+        { $set: { orderStatus: "CANCELLED" } }
+      );
+
+      if (claimed) {
+        const items = await OrderItem.find({ orderId: order._id }).lean();
+        await restoreStock({
+          orderId: String(order._id),
+          items: items.map((i: any) => ({
+            productId: String(i.productId),
+            variantId: i.variantId ? String(i.variantId) : null,
+            quantity: i.quantity,
+          })),
+        });
+
+        await PaymentLog.create({
+          orderId: order._id,
+          userId: order.userId,
+          event: "ORDER_CANCELLED",
+          paymentMethod: "ONLINE",
+          paymentStatus: "PENDING",
+          amount: order.finalAmount,
+          gatewayResponse: { reason: "abandoned_checkout_timeout", cancelledAfterMinutes: 30 },
+          signatureValid: null,
+          ipAddress: null,
+        });
+
+        cancelled++;
+      }
+    } catch (err) {
+      logger.error(`[maintenance] Failed to clean up abandoned order ${order._id}`, err);
+    }
+  }
+
+  return { archived: cancelled };
+};
+
 const runArchivalJob = async (name: string, fn: () => Promise<{ archived: number }>) => {
   try {
     const result = await fn();
@@ -99,11 +153,13 @@ const runArchivalJob = async (name: string, fn: () => Promise<{ archived: number
 };
 
 export const initMaintenanceSchedule = (): void => {
+  // Every 15 minutes: automatically clean up online checkouts abandoned for over 30 minutes and restore inventory
+  cron.schedule("*/15 * * * *", () => runArchivalJob("cleanup-abandoned-orders", cleanupAbandonedOrders));
   // 1st of every month, 03:00 — low-traffic window, well clear of the daily backup.
   cron.schedule("0 3 1 * *", () => runArchivalJob("archive-audit-logs", archiveAuditLogs));
   // 2nd of every month, 03:00 — checks for orders that crossed the retention threshold
   // since last run; monthly cadence keeps the hot collection consistently small rather
   // than doing one enormous archival pass a year.
   cron.schedule("0 3 2 * *", () => runArchivalJob("archive-orders", archiveOrders));
-  logger.info("✅ Maintenance jobs scheduled (audit log + order archival)");
+  logger.info("✅ Maintenance jobs scheduled (abandoned order cleanup + audit log + order archival)");
 };

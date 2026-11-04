@@ -29,6 +29,8 @@ export const createCoupon = async (req: Request, res: Response) => {
       minOrderAmount,
       maxUses,
       expiresAt,
+      showToCustomer,
+      colorTheme,
     } = req.body as {
       code: string;
       description?: string;
@@ -37,6 +39,8 @@ export const createCoupon = async (req: Request, res: Response) => {
       minOrderAmount?: number;
       maxUses?: number;
       expiresAt?: string;
+      showToCustomer?: boolean;
+      colorTheme?: string | null;
     };
 
     if (!code || !discountType || discountValue == null) {
@@ -65,6 +69,8 @@ export const createCoupon = async (req: Request, res: Response) => {
         minOrderAmount: minOrderAmount ?? 0,
         maxUses: maxUses ?? null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+        showToCustomer: Boolean(showToCustomer),
+        colorTheme: colorTheme || null,
       },
     });
     await createAuditLog({ req, action: "CREATE_COUPON", entity: "Coupon", entityId: coupon.id, details: { code: coupon.code, discountType, discountValue } });
@@ -92,6 +98,8 @@ export const updateCoupon = async (req: Request, res: Response) => {
       maxUses,
       expiresAt,
       isActive,
+      showToCustomer,
+      colorTheme,
     } = req.body as {
       description?: string;
       discountType?: string;
@@ -100,6 +108,8 @@ export const updateCoupon = async (req: Request, res: Response) => {
       maxUses?: number | null;
       expiresAt?: string | null;
       isActive?: boolean;
+      showToCustomer?: boolean;
+      colorTheme?: string | null;
     };
 
     if (discountType && !["PERCENTAGE", "FLAT"].includes(discountType)) {
@@ -125,6 +135,8 @@ export const updateCoupon = async (req: Request, res: Response) => {
         maxUses,
         expiresAt: expiresAt === null ? null : expiresAt ? new Date(expiresAt) : undefined,
         isActive,
+        showToCustomer,
+        colorTheme: colorTheme !== undefined ? colorTheme : undefined,
       },
     });
     await createAuditLog({ req, action: "UPDATE_COUPON", entity: "Coupon", entityId: id, details: req.body });
@@ -176,6 +188,71 @@ export const toggleCoupon = async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error("toggleCoupon error", err);
     res.status(500).json({ message: "Error toggling coupon" });
+  }
+};
+
+// ── Admin: Toggle show-to-customer status ──────────────────────────────────
+// PATCH /api/coupon/admin/:id/toggle-visibility
+export const toggleShowToCustomer = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const existing = await prisma.coupon.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ message: "Coupon not found" });
+      return;
+    }
+    const coupon = await prisma.coupon.update({
+      where: { id },
+      data: { showToCustomer: !existing.showToCustomer },
+    });
+    await createAuditLog({
+      req,
+      action: coupon.showToCustomer ? "SHOW_COUPON_TO_CUSTOMER" : "HIDE_COUPON_FROM_CUSTOMER",
+      entity: "Coupon",
+      entityId: id,
+      details: { code: coupon.code, showToCustomer: coupon.showToCustomer },
+    });
+    res.json(coupon);
+  } catch (err: any) {
+    logger.error("toggleShowToCustomer error", err);
+    res.status(500).json({ message: "Error toggling coupon visibility" });
+  }
+};
+
+// ── Customer: List public coupons for storefront carousel & checkout ─────
+// GET /api/coupon/public
+export const getPublicCoupons = async (_req: Request, res: Response) => {
+  try {
+    const coupons = await prisma.coupon.findMany({
+      where: {
+        isActive: true,
+        showToCustomer: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const now = Date.now();
+    const available = coupons.filter((c: any) => {
+      if (c.expiresAt && new Date(c.expiresAt).getTime() < now) return false;
+      if (c.maxUses !== null && c.maxUses !== undefined && c.usedCount >= c.maxUses) return false;
+      return true;
+    });
+
+    const formatted = available.map((c: any) => ({
+      id: c.id,
+      code: c.code,
+      description: c.description || "",
+      discountType: c.discountType,
+      discountValue: c.discountValue,
+      minOrderAmount: c.minOrderAmount || 0,
+      expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : null,
+      colorTheme: c.colorTheme || null,
+    }));
+
+    res.json(formatted);
+  } catch (err: any) {
+    logger.error("getPublicCoupons error", err);
+    res.status(500).json({ message: "Error fetching public coupons" });
   }
 };
 

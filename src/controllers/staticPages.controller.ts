@@ -15,6 +15,7 @@ import { createAuditLog } from "../utils/auditLog";
 const PAGE_KEYS = {
   about: "PAGE_ABOUT",
   terms: "PAGE_TERMS",
+  privacy: "PAGE_PRIVACY",
   help: "PAGE_HELP",
 } as const;
 type PageName = keyof typeof PAGE_KEYS;
@@ -29,6 +30,11 @@ const DEFAULT_TERMS = {
   body: "Add your store's terms and conditions here — shipping, returns, and usage policies. Edit this from Content Pages in the admin dashboard.",
 };
 
+const DEFAULT_PRIVACY = {
+  title: "Privacy Policy",
+  body: "We value your privacy and are committed to safeguarding your personal information. This Privacy Policy outlines the information we collect, how it is used, and the measures we take to protect your data.\n\nWe collect personal details such as your name, contact information, shipping address, and payment confirmation solely to process your orders and enhance your shopping experience. We never sell or share your sensitive information with third parties without your consent.\n\nIf you have any questions about our privacy practices, please contact our support team.",
+};
+
 const DEFAULT_HELP = {
   title: "Help Center",
   faqs: [
@@ -40,6 +46,7 @@ const DEFAULT_HELP = {
 const DEFAULTS: Record<PageName, unknown> = {
   about: DEFAULT_ABOUT,
   terms: DEFAULT_TERMS,
+  privacy: DEFAULT_PRIVACY,
   help: DEFAULT_HELP,
 };
 
@@ -64,6 +71,7 @@ export const getStaticPages = async (_req: Request, res: Response) => {
     res.status(200).json({
       about: parseJsonOrDefault(map[PAGE_KEYS.about], DEFAULT_ABOUT),
       terms: parseJsonOrDefault(map[PAGE_KEYS.terms], DEFAULT_TERMS),
+      privacy: parseJsonOrDefault(map[PAGE_KEYS.privacy], DEFAULT_PRIVACY),
       help: parseJsonOrDefault(map[PAGE_KEYS.help], DEFAULT_HELP),
     });
   } catch (err: any) {

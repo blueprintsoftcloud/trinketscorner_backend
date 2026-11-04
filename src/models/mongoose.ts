@@ -80,6 +80,7 @@ export interface IAddress extends Document {
   state: string;
   zipCode: string;
   country: string;
+  locality?: string;
   landmark?: string;
   isDefault: boolean;
   latitude?: number;
@@ -96,6 +97,7 @@ const AddressSchema = new Schema<IAddress>(
     state: { type: String, required: true },
     zipCode: { type: String, required: true },
     country: { type: String, default: 'India' },
+    locality: String,
     landmark: String,
     isDefault: { type: Boolean, default: false },
     latitude: Number,
@@ -169,6 +171,16 @@ export const DeliveryPartner = mongoose.model<IDeliveryPartner>('DeliveryPartner
 
 // ───────────────────────────── PRODUCT ───────────────────────────────
 
+export interface IProductSpecification {
+  key: string;
+  value: string;
+}
+
+export interface IProductCustomSection {
+  heading: string;
+  content: string;
+}
+
 export interface IProduct extends Document {
   code: string;
   name: string;
@@ -176,6 +188,9 @@ export interface IProduct extends Document {
   brand?: string;
   metaTitle?: string;
   metaDescription?: string;
+  materialCare?: string;
+  customSections?: IProductCustomSection[];
+  specifications?: IProductSpecification[];
   purchasePrice?: number;
   price: number;
   stock: number;
@@ -202,6 +217,25 @@ const ProductSchema = new Schema<IProduct>(
     brand: String,
     metaTitle: String,
     metaDescription: String,
+    materialCare: { type: String, default: null },
+    customSections: {
+      type: [
+        {
+          heading: { type: String, required: true },
+          content: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+    specifications: {
+      type: [
+        {
+          key: { type: String, required: true },
+          value: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
     purchasePrice: Number,
     price: { type: Number, required: true },
     stock: { type: Number, default: 0 },
@@ -723,6 +757,8 @@ export interface ICoupon extends Document {
   maxUses?: number;
   usedCount: number;
   isActive: boolean;
+  showToCustomer: boolean;
+  colorTheme?: string;
   expiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -738,6 +774,8 @@ const CouponSchema = new Schema<ICoupon>(
     maxUses: Number,
     usedCount: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    showToCustomer: { type: Boolean, default: false },
+    colorTheme: { type: String, default: null },
     expiresAt: Date,
   },
   { timestamps: true }

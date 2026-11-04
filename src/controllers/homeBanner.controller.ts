@@ -1,9 +1,9 @@
 // src/controllers/homeBanner.controller.ts
 // Manages home-page banner content stored in the HomeBanner table.
 // Types:
-//   DISCOUNT_PANEL — image panels in the discount/offer grid section
-//   CAROUSEL_ITEM  — slides in the "Curated Looks" carousel
-//   PROMO_BANNER   — full-width promotional banner carousel (below hero)
+//   DISCOUNT_PANEL â€” image panels in the discount/offer grid section
+//   CAROUSEL_ITEM  â€” slides in the "Curated Looks" carousel
+//   PROMO_BANNER   â€” full-width promotional banner carousel (below hero)
 // Section-level header text (title / subtitle) is stored in AppSetting.
 
 import { Request, Response } from "express";
@@ -24,7 +24,7 @@ const invalidatePublicBannersCache = () =>
 const VALID_TYPES = ["DISCOUNT_PANEL", "CAROUSEL_ITEM", "PROMO_BANNER"] as const;
 type BannerType = (typeof VALID_TYPES)[number];
 
-// ─── Public endpoints ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Public endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // GET /api/home-banners?type=DISCOUNT_PANEL   (public, no auth)
 export const getPublicBanners = async (req: Request, res: Response) => {
@@ -88,7 +88,7 @@ export const getPublicBanners = async (req: Request, res: Response) => {
   }
 };
 
-// ─── Admin endpoints ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Admin endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // GET /api/home-banners/admin   (admin / super-admin)
 export const getAllBannersAdmin = async (_req: Request, res: Response) => {
@@ -372,6 +372,7 @@ export const createBanner = async (req: Request, res: Response) => {
   try {
     const type = req.body.type as string | undefined;
     const title = req.body.title as string | undefined;
+    const link = req.body.link as string | undefined;
     const discount = req.body.discount as string | undefined;
     const description = req.body.description as string | undefined;
     const sortOrder = req.body.sortOrder as string | undefined;
@@ -379,7 +380,6 @@ export const createBanner = async (req: Request, res: Response) => {
     if (!type || !VALID_TYPES.includes(type as BannerType)) {
       return res.status(400).json({ message: "type must be DISCOUNT_PANEL, CAROUSEL_ITEM, or PROMO_BANNER" });
     }
-    if (!title?.trim()) return res.status(400).json({ message: "title is required" });
     if (!req.file) return res.status(400).json({ message: "image file is required" });
 
     const imageUrl = await uploadToCloudinary(req.file.buffer, "home-banners");
@@ -387,8 +387,9 @@ export const createBanner = async (req: Request, res: Response) => {
     const banner = await prisma.homeBanner.create({
       data: {
         type,
-        title: title.trim(),
+        title: title?.trim() || null,
         image: imageUrl,
+        link: link?.trim() || null,
         discount: discount?.trim() || null,
         description: description?.trim() || null,
         sortOrder: sortOrder ? parseInt(sortOrder, 10) : 0,
@@ -397,7 +398,7 @@ export const createBanner = async (req: Request, res: Response) => {
     });
 
     await invalidatePublicBannersCache();
-    await createAuditLog({ req, action: "CREATE_HOME_BANNER", entity: "HomeBanner", entityId: banner.id, details: { type, title } });
+    await createAuditLog({ req, action: "CREATE_HOME_BANNER", entity: "HomeBanner", entityId: banner.id, details: { type, title, link } });
 
     res.status(201).json(banner);
   } catch (err: any) {
@@ -411,6 +412,7 @@ export const updateBanner = async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
     const title = req.body.title as string | undefined;
+    const link = req.body.link as string | undefined;
     const discount = req.body.discount as string | undefined;
     const description = req.body.description as string | undefined;
     const sortOrder = req.body.sortOrder as string | undefined;
@@ -429,8 +431,9 @@ export const updateBanner = async (req: Request, res: Response) => {
     const banner = await prisma.homeBanner.update({
       where: { id },
       data: {
-        ...(title !== undefined && { title: title.trim() }),
+        ...(title !== undefined && { title: title.trim() || null }),
         image: imageUrl,
+        ...(link !== undefined && { link: link.trim() || null }),
         ...(discount !== undefined && { discount: discount.trim() || null }),
         ...(description !== undefined && { description: description.trim() || null }),
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder, 10) }),
@@ -439,7 +442,7 @@ export const updateBanner = async (req: Request, res: Response) => {
     });
 
     await invalidatePublicBannersCache();
-    await createAuditLog({ req, action: "UPDATE_HOME_BANNER", entity: "HomeBanner", entityId: id, details: { title } });
+    await createAuditLog({ req, action: "UPDATE_HOME_BANNER", entity: "HomeBanner", entityId: id, details: { title, link } });
 
     res.json(banner);
   } catch (err: any) {

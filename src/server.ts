@@ -1,3 +1,4 @@
+// Storra E-Commerce Server
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -97,10 +98,7 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
-      if (
-        ALLOWED_ORIGINS.includes(origin) ||
-        (env.NODE_ENV !== "production" && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
-      ) {
+      if (ALLOWED_ORIGINS.includes(origin)) {
         return callback(null, true);
       }
       return callback(new Error(`CORS: origin '${origin}' not allowed`));
@@ -132,7 +130,13 @@ process.on('unhandledRejection', (reason) => {
 // Trust the nginx reverse proxy so that express-rate-limit can read the real
 // client IP from X-Forwarded-For without throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
 app.set("trust proxy", 1);
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(cookieParser());
 app.use(ensureCsrfCookie);
 

@@ -137,7 +137,7 @@ export const productList = async (req: Request, res: Response) => {
 // POST /api/products/add  (admin)
 export const productAdd = async (req: Request, res: Response) => {
   try {
-    const { code, name, description, price, purchasePrice, category, stock, discount, brand, metaTitle, metaDescription } = req.body;
+    const { code, name, description, price, purchasePrice, category, stock, discount, brand, metaTitle, metaDescription, materialCare } = req.body;
     const sizesRaw = req.body.sizes;
     const sizes: string[] = Array.isArray(sizesRaw) ? sizesRaw : (sizesRaw ? [sizesRaw] : []);
 
@@ -190,6 +190,31 @@ export const productAdd = async (req: Request, res: Response) => {
         brand: brand ?? null,
         metaTitle: metaTitle ?? null,
         metaDescription: metaDescription ?? null,
+        materialCare: materialCare ? String(materialCare).trim() : null,
+        customSections: (() => {
+          if (!req.body.customSections) return [];
+          try {
+            const raw = typeof req.body.customSections === "string" ? JSON.parse(req.body.customSections) : req.body.customSections;
+            return Array.isArray(raw)
+              ? raw
+                  .filter((s: any) => s && typeof s.heading === "string" && s.heading.trim() && typeof s.content === "string" && s.content.trim())
+                  .map((s: any) => ({ heading: s.heading.trim(), content: s.content.trim() }))
+              : [];
+          } catch {
+            return [];
+          }
+        })(),
+        specifications: (() => {
+          if (!req.body.specifications) return [];
+          try {
+            const raw = typeof req.body.specifications === "string" ? JSON.parse(req.body.specifications) : req.body.specifications;
+            return Array.isArray(raw)
+              ? raw.filter((s: any) => s && typeof s.key === "string" && s.key.trim() && typeof s.value === "string" && s.value.trim()).map((s: any) => ({ key: s.key.trim(), value: s.value.trim() }))
+              : [];
+          } catch {
+            return [];
+          }
+        })(),
         price: parseFloat(price),
         purchasePrice: purchasePrice != null ? parseFloat(purchasePrice) : null,
         categoryId: category,
@@ -266,7 +291,7 @@ export const productAdd = async (req: Request, res: Response) => {
 export const productUpdate = async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const { code, name, description, price, purchasePrice, category, stock, discount, brand, metaTitle, metaDescription } = req.body;
+    const { code, name, description, price, purchasePrice, category, stock, discount, brand, metaTitle, metaDescription, materialCare } = req.body;
     const sizesRaw = req.body.sizes;
     const sizes: string[] | undefined = sizesRaw !== undefined
       ? (Array.isArray(sizesRaw) ? sizesRaw : [sizesRaw])
@@ -365,16 +390,6 @@ export const productUpdate = async (req: Request, res: Response) => {
       }
     }
 
-    let discountValue = existing.discount;
-    if (discountInput !== undefined) {
-      if (discountInput === null || discountInput === "") {
-        discountValue = 0;
-      } else {
-        const parsed = parseFloat(String(discountInput));
-        discountValue = isNaN(parsed) || parsed < 0 ? 0 : Math.min(parsed, 100);
-      }
-    }
-
     const updated = await prisma.product.update({
       where: { id },
       data: {
@@ -384,15 +399,38 @@ export const productUpdate = async (req: Request, res: Response) => {
         brand: brand !== undefined ? (brand.trim() || null) : existing.brand,
         metaTitle: metaTitle !== undefined ? metaTitle : existing.metaTitle,
         metaDescription: metaDescription !== undefined ? metaDescription : existing.metaDescription,
+        materialCare: req.body.materialCare !== undefined ? (req.body.materialCare ? String(req.body.materialCare).trim() : null) : existing.materialCare,
+        customSections: req.body.customSections !== undefined ? (() => {
+          try {
+            const raw = typeof req.body.customSections === "string" ? JSON.parse(req.body.customSections) : req.body.customSections;
+            return Array.isArray(raw)
+              ? raw
+                  .filter((s: any) => s && typeof s.heading === "string" && s.heading.trim() && typeof s.content === "string" && s.content.trim())
+                  .map((s: any) => ({ heading: s.heading.trim(), content: s.content.trim() }))
+              : [];
+          } catch {
+            return [];
+          }
+        })() : (existing as any).customSections,
+        specifications: req.body.specifications !== undefined ? (() => {
+          try {
+            const raw = typeof req.body.specifications === "string" ? JSON.parse(req.body.specifications) : req.body.specifications;
+            return Array.isArray(raw)
+              ? raw.filter((s: any) => s && typeof s.key === "string" && s.key.trim() && typeof s.value === "string" && s.value.trim()).map((s: any) => ({ key: s.key.trim(), value: s.value.trim() }))
+              : [];
+          } catch {
+            return [];
+          }
+        })() : existing.specifications,
         price: priceInput ? parseFloat(priceInput) : existing.price,
-        purchasePrice: purchasePriceInput !== undefined ? (purchasePriceInput !== null && purchasePriceInput !== "" ? parseFloat(String(purchasePriceInput)) : null) : existing.purchasePrice,
+        purchasePrice: purchasePriceInput !== undefined ? (purchasePriceInput !== null ? parseFloat(purchasePriceInput) : null) : existing.purchasePrice,
         categoryId: category ?? existing.categoryId,
         image: imageUrl,
         images: updatedImages,
         stock: stockOverride !== undefined ? parseInt(stockOverride) : existing.stock,
         stockQuantity: stockOverride !== undefined ? parseInt(stockOverride) : existing.stockQuantity,
         sizes: sizes ?? existing.sizes,
-        discount: discountValue,
+        discount: discountInput !== undefined ? parseFloat(discountInput) : existing.discount,
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -625,6 +663,8 @@ export const adminStockSummary = async (req: Request, res: Response) => {
 export const productAdminDetail = async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
+    const { from, to } = req.query as { from?: string; to?: string };
+
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
@@ -648,52 +688,180 @@ export const productAdminDetail = async (req: Request, res: Response) => {
       orderBy: { createdAt: "asc" },
     });
 
-    // Compute sales metrics from OrderItem
-    let salesStats = { totalUnitsSold: 0, totalRevenue: 0, totalOrdersCount: 0 };
-    try {
-      const salesAggregate = await OrderItem.aggregate([
-        { $match: { productId: new mongoose.Types.ObjectId(id) } },
-        {
-          $lookup: {
-            from: "orders",
-            localField: "orderId",
-            foreignField: "_id",
-            as: "order",
-          },
-        },
-        { $unwind: "$order" },
-        { $match: { "order.orderStatus": { $nin: ["CANCELLED", "RETURNED"] } } },
-        {
-          $group: {
-            _id: "$productId",
-            totalUnitsSold: { $sum: "$quantity" },
-            totalRevenue: { $sum: { $multiply: ["$quantity", "$price"] } },
-            totalOrders: { $addToSet: "$orderId" },
-          },
-        },
-      ]);
+    // Parse selective date range if provided
+    const fromDate = from && !isNaN(new Date(from).getTime()) ? new Date(from) : undefined;
+    const toDate = to && !isNaN(new Date(to).getTime()) ? new Date(new Date(to).setHours(23, 59, 59, 999)) : undefined;
+    const hasDateFilter = Boolean(fromDate || toDate);
 
-      if (salesAggregate && salesAggregate[0]) {
-        salesStats = {
-          totalUnitsSold: salesAggregate[0].totalUnitsSold ?? 0,
-          totalRevenue: Math.round(salesAggregate[0].totalRevenue ?? 0),
-          totalOrdersCount: Array.isArray(salesAggregate[0].totalOrders) ? salesAggregate[0].totalOrders.length : 0,
-        };
+    const dateMatchStage: Record<string, any> = {};
+    if (fromDate || toDate) {
+      dateMatchStage["order.createdAt"] = {};
+      if (fromDate) dateMatchStage["order.createdAt"].$gte = fromDate;
+      if (toDate) dateMatchStage["order.createdAt"].$lte = toDate;
+    }
+
+    // Compute sales metrics and monthly breakdown from OrderItem
+    let salesStats: {
+      totalUnitsSold: number;
+      totalRevenue: number;
+      totalOrdersCount: number;
+      lifetimeUnitsSold: number;
+      lifetimeRevenue: number;
+      lifetimeOrdersCount: number;
+      isFiltered: boolean;
+      fromDate?: string | null;
+      toDate?: string | null;
+    } = {
+      totalUnitsSold: 0,
+      totalRevenue: 0,
+      totalOrdersCount: 0,
+      lifetimeUnitsSold: 0,
+      lifetimeRevenue: 0,
+      lifetimeOrdersCount: 0,
+      isFiltered: hasDateFilter,
+      fromDate: fromDate?.toISOString() ?? null,
+      toDate: toDate?.toISOString() ?? null,
+    };
+
+    let monthlyBreakdown: Array<{
+      month: string;
+      monthName: string;
+      unitsSold: number;
+      revenue: number;
+      ordersCount: number;
+    }> = [];
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      try {
+        const aggResult = await OrderItem.aggregate([
+          { $match: { productId: new mongoose.Types.ObjectId(id) } },
+          {
+            $lookup: {
+              from: "orders",
+              localField: "orderId",
+              foreignField: "_id",
+              as: "order",
+            },
+          },
+          { $unwind: "$order" },
+          { $match: { "order.orderStatus": { $nin: ["CANCELLED", "RETURNED"] } } },
+          {
+            $facet: {
+              lifetimeSummary: [
+                {
+                  $group: {
+                    _id: null,
+                    totalUnitsSold: { $sum: "$quantity" },
+                    totalRevenue: { $sum: { $multiply: ["$quantity", "$price"] } },
+                    totalOrders: { $addToSet: "$orderId" },
+                  },
+                },
+              ],
+              filteredSummary: [
+                ...(hasDateFilter ? [{ $match: dateMatchStage }] : []),
+                {
+                  $group: {
+                    _id: null,
+                    totalUnitsSold: { $sum: "$quantity" },
+                    totalRevenue: { $sum: { $multiply: ["$quantity", "$price"] } },
+                    totalOrders: { $addToSet: "$orderId" },
+                  },
+                },
+              ],
+              monthlyBreakdown: [
+                ...(hasDateFilter ? [{ $match: dateMatchStage }] : []),
+                {
+                  $group: {
+                    _id: {
+                      $dateToString: { format: "%Y-%m", date: "$order.createdAt" },
+                    },
+                    unitsSold: { $sum: "$quantity" },
+                    revenue: { $sum: { $multiply: ["$quantity", "$price"] } },
+                    totalOrders: { $addToSet: "$orderId" },
+                  },
+                },
+                { $sort: { _id: -1 } },
+                {
+                  $project: {
+                    _id: 0,
+                    month: "$_id",
+                    unitsSold: 1,
+                    revenue: { $round: ["$revenue", 2] },
+                    ordersCount: { $size: "$totalOrders" },
+                  },
+                },
+              ],
+            },
+          },
+        ]);
+
+        if (aggResult && aggResult[0]) {
+          const { lifetimeSummary, filteredSummary, monthlyBreakdown: months } = aggResult[0];
+
+          const lifeUnits = lifetimeSummary?.[0]?.totalUnitsSold ?? 0;
+          const lifeRev = Math.round(lifetimeSummary?.[0]?.totalRevenue ?? 0);
+          const lifeOrders = Array.isArray(lifetimeSummary?.[0]?.totalOrders)
+            ? lifetimeSummary[0].totalOrders.length
+            : 0;
+
+          const filtUnits = filteredSummary?.[0]?.totalUnitsSold ?? (hasDateFilter ? 0 : lifeUnits);
+          const filtRev = Math.round(filteredSummary?.[0]?.totalRevenue ?? (hasDateFilter ? 0 : lifeRev));
+          const filtOrders = Array.isArray(filteredSummary?.[0]?.totalOrders)
+            ? filteredSummary[0].totalOrders.length
+            : (hasDateFilter ? 0 : lifeOrders);
+
+          salesStats = {
+            totalUnitsSold: filtUnits,
+            totalRevenue: filtRev,
+            totalOrdersCount: filtOrders,
+            lifetimeUnitsSold: lifeUnits,
+            lifetimeRevenue: lifeRev,
+            lifetimeOrdersCount: lifeOrders,
+            isFiltered: hasDateFilter,
+            fromDate: fromDate?.toISOString() ?? null,
+            toDate: toDate?.toISOString() ?? null,
+          };
+
+          const monthNames = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+          ];
+
+          monthlyBreakdown = (months || []).map((m: any) => {
+            let monthName = m.month || "Unknown";
+            if (typeof m.month === "string" && m.month.includes("-")) {
+              const [year, monthNum] = m.month.split("-");
+              const idx = parseInt(monthNum, 10) - 1;
+              if (idx >= 0 && idx < 12) {
+                monthName = `${monthNames[idx]} ${year}`;
+              }
+            }
+            return {
+              month: m.month,
+              monthName,
+              unitsSold: m.unitsSold ?? 0,
+              revenue: Math.round(m.revenue ?? 0),
+              ordersCount: m.ordersCount ?? 0,
+            };
+          });
+        }
+      } catch (salesErr) {
+        logger.warn("productAdminDetail: salesAggregate failed, falling back to 0", salesErr);
       }
-    } catch (salesErr) {
-      logger.warn("productAdminDetail: salesAggregate failed, falling back to 0", salesErr);
     }
 
     res.status(200).json({
       product,
       variants,
       salesStats,
+      monthlyBreakdown,
     });
   } catch (err: any) {
     logger.error("productAdminDetail error", err);
     res.status(500).json({ message: "Error fetching product details", error: err.message });
   }
 };
+
 
 // PATCH /api/product/:id/quick-stock (admin)
 export const quickStockUpdate = async (req: Request, res: Response) => {

@@ -24,7 +24,7 @@ const invalidateCategoryListCache = () => invalidateCache("user-categories:nav")
 // GET /api/categories
 export const categoryList = async (req: Request, res: Response) => {
   try {
-    const { search } = req.query;
+    const search = (req.query.search || req.query.q) as string | undefined;
     let whereClause: any = {};
 
     if (search && typeof search === "string" && search.trim() !== "") {

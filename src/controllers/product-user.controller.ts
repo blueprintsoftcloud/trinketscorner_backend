@@ -8,22 +8,125 @@ import { buildAttributeValueWhereConditions } from "../utils/attributeFilter";
 import { expandProductsWithVariants, paginateListingRows } from "../utils/productVariant";
 
 // GET /api/user/categories  — lightweight category list for user display
-export const getAllCategories = async (_req: Request, res: Response) => {
+export const getAllCategories = async (req: Request, res: Response) => {
   try {
-    // Nav categories are read on nearly every storefront page and rarely change —
-    // see cache.ts's TTL-backstopped in-process cache (same pattern as home-banners).
-    const categories = await getCached("user-categories:nav", () =>
-      prisma.category.findMany({
-        where: { isActive: true },
-        select: { id: true, name: true, image: true, parentId: true, showInNav: true, navOrder: true, showFilters: true },
-        // navOrder only matters (and is only set) for top-level categories — subcategories
-        // all default to 0 and fall back to alphabetical among themselves either way.
-        orderBy: { navOrder: "asc", name: "asc" },
-      }),
-    );
-    res
-      .status(200)
-      .json({ message: "Category fetched in user display", categories });
+    const rawSearch = (req.query.search || req.query.q || "") as string;
+    const q = typeof rawSearch === "string" ? rawSearch.trim() : "";
+
+    // If no search query provided, return the cached active category navigation list
+    if (!q) {
+      const categories = await getCached("user-categories:nav", () =>
+        prisma.category.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, image: true, description: true, parentId: true, showInNav: true, navOrder: true, showFilters: true },
+          // navOrder only matters (and is only set) for top-level categories — subcategories
+          // all default to 0 and fall back to alphabetical among themselves either way.
+          orderBy: { navOrder: "asc", name: "asc" },
+        }),
+      );
+      return res
+        .status(200)
+        .json({ message: "Category fetched in user display", categories });
+    }
+
+    // Direct database search: match name, description, or category code (case-insensitive)
+    const matchingCategories = await prisma.category.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { code: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        description: true,
+        parentId: true,
+        showInNav: true,
+        navOrder: true,
+        showFilters: true,
+      },
+      orderBy: { navOrder: "asc", name: "asc" },
+    });
+
+    if (matchingCategories.length === 0) {
+      return res.status(200).json({
+        message: "No categories match the search query",
+        search: q,
+        total: 0,
+        categories: [],
+      });
+    }
+
+    // Preserve storefront hierarchy:
+    // 1. If a matching category is a subcategory, ensure its parent category is included.
+    // 2. If a matching category is a parent category, ensure its direct subcategories are included.
+    const categoryMap = new Map<string, any>();
+    matchingCategories.forEach((cat: any) => categoryMap.set(String(cat.id), cat));
+
+    const missingParentIds = matchingCategories
+      .map((c: any) => (c.parentId ? String(c.parentId) : null))
+      .filter((pid: string | null): pid is string => !!pid && !categoryMap.has(pid));
+
+    const matchedRootIds = matchingCategories
+      .filter((c: any) => !c.parentId)
+      .map((c: any) => String(c.id));
+
+    const extraFetches: Promise<any>[] = [];
+    if (missingParentIds.length > 0) {
+      extraFetches.push(
+        prisma.category.findMany({
+          where: { id: { in: missingParentIds }, isActive: true },
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            description: true,
+            parentId: true,
+            showInNav: true,
+            navOrder: true,
+            showFilters: true,
+          },
+        })
+      );
+    }
+    if (matchedRootIds.length > 0) {
+      extraFetches.push(
+        prisma.category.findMany({
+          where: { parentId: { in: matchedRootIds }, isActive: true },
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            description: true,
+            parentId: true,
+            showInNav: true,
+            navOrder: true,
+            showFilters: true,
+          },
+        })
+      );
+    }
+
+    if (extraFetches.length > 0) {
+      const extraResults = await Promise.all(extraFetches);
+      extraResults.flat().forEach((cat: any) => {
+        if (cat && cat.id) {
+          categoryMap.set(String(cat.id), cat);
+        }
+      });
+    }
+
+    const categories = Array.from(categoryMap.values());
+    return res.status(200).json({
+      message: "Categories matched backend search",
+      search: q,
+      total: categories.length,
+      categories,
+    });
   } catch (err: any) {
     logger.error("getAllCategories error", err);
     res.status(500).json({ message: "Error in category fetching" });

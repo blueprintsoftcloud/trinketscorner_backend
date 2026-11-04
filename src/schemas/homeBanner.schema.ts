@@ -10,7 +10,7 @@ const VALID_TYPES = ["DISCOUNT_PANEL", "CAROUSEL_ITEM", "PROMO_BANNER"] as const
 
 export const bannerCreateSchema = z.object({
   type: z.enum(VALID_TYPES, { required_error: "type must be DISCOUNT_PANEL, CAROUSEL_ITEM, or PROMO_BANNER" }),
-  title: z.string().min(1, "title is required").trim(),
+  title: z.string().max(200).trim().optional(),
   link: z.string().max(500).trim().optional(),
   discount: z.string().max(100).trim().optional(),
   description: z.string().max(500).trim().optional(),
@@ -18,12 +18,12 @@ export const bannerCreateSchema = z.object({
 });
 
 export const bannerUpdateSchema = z.object({
-  title: z.string().min(1).trim().optional(),
+  title: z.string().max(200).trim().optional(),
   link: z.string().max(500).trim().optional(),
   discount: z.string().max(100).trim().optional(),
   description: z.string().max(500).trim().optional(),
   sortOrder: z.coerce.number().int().optional(),
-  // Left as a raw string (form-data sends "true"/"false") — the controller does its
+  // Left as a raw string (form-data sends "true"/"false") â€” the controller does its
   // own truthy parsing; z.coerce.boolean() would incorrectly coerce the string "false"
   // to `true` since any non-empty string is truthy.
   isActive: z.string().optional(),

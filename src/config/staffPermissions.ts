@@ -16,6 +16,7 @@ export const STAFF_PERMISSIONS = [
   // Order
   "ORDER_VIEW",
   "ORDER_UPDATE",
+  "ORDER_CREATE",
   // Coupon
   "COUPON_VIEW",
   "COUPON_ADD",
@@ -64,6 +65,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: "ORDER_VIEW" as StaffPermission, label: "View Orders" },
       { key: "ORDER_UPDATE" as StaffPermission, label: "Update Order Status" },
+      { key: "ORDER_CREATE" as StaffPermission, label: "Place Order on Behalf of Customer" },
     ],
   },
   {

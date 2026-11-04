@@ -16,14 +16,16 @@ export const productAddSchema = z.object({
   brand: z.string().max(100, "Brand too long").trim().optional(),
   // Optional per-product SEO overrides — fall back to name/description on the frontend
   // when unset, so filling these in is never required.
+  materialCare: z.string().max(2000, "Material & Care text too long").trim().optional(),
+  customSections: z.any().optional(),
+  specifications: z.any().optional(),
   metaTitle: z.string().max(70, "Meta title too long").trim().optional(),
   metaDescription: z.string().max(160, "Meta description too long").trim().optional(),
   purchasePrice: z
     .union([z.string(), z.number()])
-    .nullable()
-    .optional()
-    .transform((v) => (v === "" || v === null || v === undefined ? null : parseFloat(String(v))))
-    .refine((v) => v === null || (!isNaN(v) && v >= 0), "Purchase price must be a non-negative number"),
+    .transform((v) => parseFloat(String(v)))
+    .refine((v) => !isNaN(v) && v >= 0, "Purchase price must be a non-negative number")
+    .optional(),
   price: z
     .union([z.string(), z.number()])
     .transform((v) => parseFloat(String(v)))
@@ -39,7 +41,7 @@ export const productAddSchema = z.object({
   sizes: z.any().optional(),
   discount: z
     .union([z.string(), z.number()])
-    .transform((v) => (v === "" || v === null || v === undefined ? 0 : parseFloat(String(v))))
+    .transform((v) => (v === "" ? 0 : parseFloat(String(v))))
     .refine((v) => !isNaN(v) && v >= 0 && v <= 100, "Discount must be between 0 and 100")
     .optional()
     .default(0),
@@ -55,14 +57,16 @@ export const productUpdateSchema = z.object({
   name: z.string().min(1).max(200).trim().optional(),
   description: z.string().max(50000, "Description too long").trim().optional(),
   brand: z.string().max(100).trim().optional(),
+  materialCare: z.string().max(2000, "Material & Care text too long").trim().optional(),
+  customSections: z.any().optional(),
+  specifications: z.any().optional(),
   metaTitle: z.string().max(70, "Meta title too long").trim().optional(),
   metaDescription: z.string().max(160, "Meta description too long").trim().optional(),
   purchasePrice: z
     .union([z.string(), z.number()])
-    .nullable()
-    .optional()
-    .transform((v) => (v === "" || v === null || v === undefined ? null : parseFloat(String(v))))
-    .refine((v) => v === null || (!isNaN(v) && v >= 0), "Purchase price must be a non-negative number"),
+    .transform((v) => parseFloat(String(v)))
+    .refine((v) => !isNaN(v) && v >= 0, "Purchase price must be a non-negative number")
+    .optional(),
   price: z
     .union([z.string(), z.number()])
     .transform((v) => parseFloat(String(v)))
@@ -77,7 +81,7 @@ export const productUpdateSchema = z.object({
   sizes: z.any().optional(),
   discount: z
     .union([z.string(), z.number()])
-    .transform((v) => (v === "" || v === null || v === undefined ? 0 : parseFloat(String(v))))
+    .transform((v) => (v === "" ? 0 : parseFloat(String(v))))
     .refine((v) => !isNaN(v) && v >= 0 && v <= 100, "Discount must be between 0 and 100")
     .optional(),
   // Same reasoning as productAddSchema's attributeValues above — both are

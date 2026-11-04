@@ -23,7 +23,7 @@ export const categoryAddSchema = z
       .min(1, "Name cannot be empty")
       .max(100, "Name too long")
       .trim(),
-    description: z.string().max(500, "Description too long").trim().optional(),
+    description: z.string().max(1000, "Description too long").trim().optional(),
     parentId: parentIdField,
     showFilters: z.union([z.boolean(), z.string().transform((v) => v === "true" || v === "1")]).optional(),
   })
@@ -35,7 +35,7 @@ export const categoryAddSchema = z
 export const categoryUpdateSchema = z.object({
   code: z.string().min(1).max(50).trim().optional(),
   name: z.string().min(1).max(100).trim().optional(),
-  description: z.string().max(500).trim().optional(),
+  description: z.string().max(1000, "Description too long").trim().optional(),
   parentId: parentIdField,
   showFilters: z.union([z.boolean(), z.string().transform((v) => v === "true" || v === "1")]).optional(),
 });
