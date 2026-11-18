@@ -2415,7 +2415,7 @@ export const getProductsForAdminOrder = async (req: Request, res: Response) => {
       prisma.product.findMany({
         where,
         select: {
-          id: true, name: true, code: true, image: true, description: true, price: true, stock: true,
+          id: true, name: true, code: true, image: true, description: true, price: true, discount: true, stock: true,
           category: { select: { id: true, name: true } },
         },
         orderBy: { name: "asc" },
